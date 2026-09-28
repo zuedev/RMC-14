@@ -115,6 +115,9 @@ public sealed class AHelpUIController: UIController, IOnSystemChanged<BwoinkSyst
         DebugTools.Assert(_bwoinkSystem != null);
         _bwoinkSystem!.OnBwoinkTextMessageRecieved -= ReceivedBwoink;
         _bwoinkSystem = null;
+
+        if (UIHelper is AdminAHelpUIHandler admin)
+            admin.ResetControl();
     }
 
     private void SetAHelpPressed(bool pressed)
@@ -426,21 +429,41 @@ public sealed class AdminAHelpUIHandler : IAHelpUIHandler
         // popped-out window is being closed
         if (ClydeWindow != null)
         {
-            ClydeWindow.RequestClosed -= OnRequestClosed;
-            ClydeWindow.Dispose();
-            // need to dispose control cause we cant reattach it directly back to the window
-            // but orphan panels first so -they- can get readded when the window is opened again
-            if (Control != null)
-            {
-                foreach (var (_, panel) in _activePanelMap)
-                {
-                    panel.Orphan();
-                }
-                Control?.Dispose();
-            }
+
+            DestroyControl();
             // window wont be closed here so we will invoke ourselves
             OnClose?.Invoke();
         }
+    }
+
+    public void ResetControl()
+    {
+        if (IsOpen)
+            Close();
+
+        DestroyControl();
+    }
+
+    private void DestroyControl()
+    {
+        foreach (var panel in _activePanelMap.Values)
+        {
+            panel.Orphan();
+        }
+
+        if (ClydeWindow != null)
+        {
+            ClydeWindow.RequestClosed -= OnRequestClosed;
+            ClydeWindow.Dispose();
+            ClydeWindow = null;
+            WindowRoot = null;
+        }
+
+        Control?.Dispose();
+        Control = null;
+        Window?.Dispose();
+        Window = null;
+        EverOpened = false;
     }
 
     public void ToggleWindow()
@@ -537,11 +560,14 @@ public sealed class AdminAHelpUIHandler : IAHelpUIHandler
 
     public void Dispose()
     {
-        Window?.Dispose();
-        Window = null;
-        Control = null;
+        DestroyControl();
+
+        foreach (var panel in _activePanelMap.Values)
+        {
+            panel.Dispose();
+        }
+
         _activePanelMap.Clear();
-        EverOpened = false;
     }
 }
 
